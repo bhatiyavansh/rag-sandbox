@@ -394,7 +394,7 @@ def _validate_parsed(parsed: Any, raw_text: str) -> List[Dict[str, Any]]:
 
 # ---- Main function that talks to OpenRouter ----
 
-def generate_api_response(context: str, query: str, model: str = "openai/gpt-3.5-turbo") -> List[Dict[str, Any]]:
+def generate_api_response(context: str, query: str, model: str = "openai/gpt-4o-mini") -> List[Dict[str, Any]]:
     """
     Call OpenRouter and return a validated List[TopicObjects] exactly matching the structure:
     [

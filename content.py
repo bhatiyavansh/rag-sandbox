@@ -137,8 +137,8 @@ def generate_subtopic_items(
     context: str = "",
     model: str = "openai/gpt-3.5-turbo",
     min_items: int = 6,
-    temperature: float = 0.3,
-    max_tokens: int = 2000,
+    temperature: float = 0.9,
+    max_tokens: int = 2400,
     raise_on_error: bool = False,
 ) -> List[Dict[str, str]]:
     """
@@ -162,16 +162,18 @@ def generate_subtopic_items(
         "Output a JSON ARRAY. Each array element must be an OBJECT with exactly these keys:\n"
         '  \"type\": \"SUBTOPIC\",\n'
         '  \"name\": \"Short subtopic name\",\n'
-        '  \"content\": \"Concise learning content for this subtopic\"\n\n'
+        '  \"content\": \"detailed learning content for this subtopic\"\n\n'
         "Rules:\n"
-        "1) Top-level value MUST be an ARRAY even if it contains one element.\n"
+        "1) make the content sound like a teacher make it extremely detailed do one paragraph per point, use real world examples and explain in detail\n"
+
         "2) Each object must have type exactly 'SUBTOPIC'.\n"
         "3) Do NOT include any additional top-level keys.\n"
-        "4) The 'content' field must contain at least 1-3 concise points, short explanation, or key concepts.\n"
+        "4) The 'content' field must contain at least 1-3 detailed points, detailed explanation, or key concepts.\n"
         "5) Keep names concise. Do not include explanations outside the JSON.\n"
-        f"6) Give at least {min_items} SUBTOPICS.\n"
+        "6)Give code snippets and real world examples whenever its a computer science topic "
         "7) Give Atleast 5 content jsons for each subtopic.\n"
         "8) Give Atleast 2 question jsons for each subtopic\n"
+        "9)Top-level value MUST be an ARRAY even if it contains one element. \n"
         
     )
 
@@ -179,7 +181,7 @@ def generate_subtopic_items(
         f"Subtopic: {subtopic}\n"
         f"Context (optional): {context}\n\n"
         "Return an ARRAY of subtopic objects only, each with a 'name' and meaningful 'content'. "
-        "Provide short key points or explanations suitable for learning."
+        
     )
 
     # (system_prompt and user_prompt same as earlier file)
