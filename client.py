@@ -273,123 +273,123 @@ def _extract_json(text: str) -> Optional[str]:
 
     return None
 
-# def _validate_and_repair_topic(obj: Dict[str, Any]) -> Dict[str, Any]:
-#     """
-#     Ensure returned topic object has exactly:
-#       - type: "TOPIC"
-#       - name: str
-#       - subtopics: list of { type: "SUBTOPIC", name: str, content: str }
-#     Multi-line or bullet point content is captured for each subtopic.
-#     """
-#     repaired: Dict[str, Any] = {}
+def _validate_and_repair_topic(obj: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Ensure returned topic object has exactly:
+      - type: "TOPIC"
+      - name: str
+      - subtopics: list of { type: "SUBTOPIC", name: str, content: str }
+    Multi-line or bullet point content is captured for each subtopic.
+    """
+    repaired: Dict[str, Any] = {}
 
-#     # type
-#     t = obj.get("type") or obj.get("TYPE") or obj.get("node_type") or "TOPIC"
-#     t = (t or "TOPIC").strip().upper()
-#     if t != "TOPIC":
-#         t = "TOPIC"
-#     repaired["type"] = t
+    # type
+    t = obj.get("type") or obj.get("TYPE") or obj.get("node_type") or "TOPIC"
+    t = (t or "TOPIC").strip().upper()
+    if t != "TOPIC":
+        t = "TOPIC"
+    repaired["type"] = t
 
-#     # name
-#     name = obj.get("name") or obj.get("title") or obj.get("topic") or "Untitled Topic"
-#     repaired["name"] = name.strip()
+    # name
+    name = obj.get("name") or obj.get("title") or obj.get("topic") or "Untitled Topic"
+    repaired["name"] = name.strip()
 
-#     # subtopics
-#     subtopics_raw = obj.get("subtopics") or obj.get("SUBTOPICS") or obj.get("children") or []
-#     repaired_subs: List[Dict[str, str]] = []
+    # subtopics
+    subtopics_raw = obj.get("subtopics") or obj.get("SUBTOPICS") or obj.get("children") or []
+    repaired_subs: List[Dict[str, str]] = []
 
-#     # helper to extract content cleanly
-#     def get_sub_content(sub_dict: dict) -> str:
-#         content = sub_dict.get("content") or sub_dict.get("details") or sub_dict.get("description") or ""
-#         if isinstance(content, str):
-#             # clean up whitespace and multiple lines
-#             content_lines = [line.strip() for line in content.splitlines() if line.strip()]
-#             return "\n".join(content_lines) if content_lines else ""
-#         return ""
+    # helper to extract content cleanly
+    def get_sub_content(sub_dict: dict) -> str:
+        content = sub_dict.get("content") or sub_dict.get("details") or sub_dict.get("description") or ""
+        if isinstance(content, str):
+            # clean up whitespace and multiple lines
+            content_lines = [line.strip() for line in content.splitlines() if line.strip()]
+            return "\n".join(content_lines) if content_lines else ""
+        return ""
 
-#     if isinstance(subtopics_raw, str):
-#         # multi-line string: each line becomes a subtopic
-#         lines = [l.strip() for l in subtopics_raw.splitlines() if l.strip()]
-#         for ln in lines:
-#             repaired_subs.append({
-#                 "type": "SUBTOPIC",
-#                 "name": ln[:200],
-#                 "content": f"Content to be learned for '{ln[:200]}'"
-#             })
-#     elif isinstance(subtopics_raw, list):
-#         for s in subtopics_raw:
-#             if isinstance(s, dict):
-#                 s_name = s.get("name") or s.get("title") or s.get("subtopic") or ""
-#                 if not isinstance(s_name, str) or not s_name.strip():
-#                     continue
-#                 s_content = get_sub_content(s)
-#                 if not s_content:
-#                     s_content = f"Content to be learned for '{s_name.strip()}'"
-#                 repaired_subs.append({
-#                     "type": "SUBTOPIC",
-#                     "name": s_name.strip(),
-#                     "content": s_content
-#                 })
-#             elif isinstance(s, str) and s.strip():
-#                 repaired_subs.append({
-#                     "type": "SUBTOPIC",
-#                     "name": s.strip(),
-#                     "content": f"Content to be learned for '{s.strip()}'"
-#                 })
-#     else:
-#         repaired_subs = []
+    if isinstance(subtopics_raw, str):
+        # multi-line string: each line becomes a subtopic
+        lines = [l.strip() for l in subtopics_raw.splitlines() if l.strip()]
+        for ln in lines:
+            repaired_subs.append({
+                "type": "SUBTOPIC",
+                "name": ln[:200],
+                "content": f"Content to be learned for '{ln[:200]}'"
+            })
+    elif isinstance(subtopics_raw, list):
+        for s in subtopics_raw:
+            if isinstance(s, dict):
+                s_name = s.get("name") or s.get("title") or s.get("subtopic") or ""
+                if not isinstance(s_name, str) or not s_name.strip():
+                    continue
+                s_content = get_sub_content(s)
+                if not s_content:
+                    s_content = f"Content to be learned for '{s_name.strip()}'"
+                repaired_subs.append({
+                    "type": "SUBTOPIC",
+                    "name": s_name.strip(),
+                    "content": s_content
+                })
+            elif isinstance(s, str) and s.strip():
+                repaired_subs.append({
+                    "type": "SUBTOPIC",
+                    "name": s.strip(),
+                    "content": f"Content to be learned for '{s.strip()}'"
+                })
+    else:
+        repaired_subs = []
 
-#     repaired["subtopics"] = repaired_subs
-#     return repaired
+    repaired["subtopics"] = repaired_subs
+    return repaired
 
 
-# def _validate_parsed(parsed: Any, raw_text: str) -> List[Dict[str, Any]]:
-#     """
-#     Accept either list or dict. Return list of validated topic objects.
-#     Ensure each subtopic has 'content'. If missing, generate default content.
-#     """
-#     default_content = lambda sub_name: f"Content to be learned for '{sub_name}'"
+def _validate_parsed(parsed: Any, raw_text: str) -> List[Dict[str, Any]]:
+    """
+    Accept either list or dict. Return list of validated topic objects.
+    Ensure each subtopic has 'content'. If missing, generate default content.
+    """
+    default_content = lambda sub_name: f"Content to be learned for '{sub_name}'"
 
-#     if isinstance(parsed, list):
-#         out = []
-#         for elem in parsed:
-#             if isinstance(elem, dict):
-#                 topic = _validate_and_repair_topic(elem)
-#                 # Ensure each subtopic has content
-#                 for sub in topic["subtopics"]:
-#                     if "content" not in sub or not sub["content"].strip():
-#                         sub["content"] = default_content(sub["name"])
-#                 out.append(topic)
-#             elif isinstance(elem, str) and elem.strip():
-#                 out.append({
-#                     "type": "TOPIC",
-#                     "name": elem.strip()[:200],
-#                     "subtopics": [{"type": "SUBTOPIC", "name": elem.strip(), "content": default_content(elem.strip())}]
-#                 })
-#             else:
-#                 out.append({
-#                     "type": "TOPIC",
-#                     "name": "RESOURCE",
-#                     "subtopics": [{"type": "SUBTOPIC", "name": "RESOURCE", "content": "No content available"}]
-#                 })
-#         return out
+    if isinstance(parsed, list):
+        out = []
+        for elem in parsed:
+            if isinstance(elem, dict):
+                topic = _validate_and_repair_topic(elem)
+                # Ensure each subtopic has content
+                for sub in topic["subtopics"]:
+                    if "content" not in sub or not sub["content"].strip():
+                        sub["content"] = default_content(sub["name"])
+                out.append(topic)
+            elif isinstance(elem, str) and elem.strip():
+                out.append({
+                    "type": "TOPIC",
+                    "name": elem.strip()[:200],
+                    "subtopics": [{"type": "SUBTOPIC", "name": elem.strip(), "content": default_content(elem.strip())}]
+                })
+            else:
+                out.append({
+                    "type": "TOPIC",
+                    "name": "RESOURCE",
+                    "subtopics": [{"type": "SUBTOPIC", "name": "RESOURCE", "content": "No content available"}]
+                })
+        return out
 
-#     if isinstance(parsed, dict):
-#         topic = _validate_and_repair_topic(parsed)
-#         for sub in topic["subtopics"]:
-#             if "content" not in sub or not sub["content"].strip():
-#                 sub["content"] = default_content(sub["name"])
-#         return [topic]
+    if isinstance(parsed, dict):
+        topic = _validate_and_repair_topic(parsed)
+        for sub in topic["subtopics"]:
+            if "content" not in sub or not sub["content"].strip():
+                sub["content"] = default_content(sub["name"])
+        return [topic]
 
-#     # fallback: embed raw text as single RESOURCE topic
-#     snippet = raw_text.strip()
-#     if len(snippet) > 1000:
-#         snippet = snippet[:997] + "..."
-#     return [{
-#         "type": "TOPIC",
-#         "name": "RESOURCE",
-#         "subtopics": [{"type": "SUBTOPIC", "name": snippet, "content": "Content not available"}]
-#     }]
+    # fallback: embed raw text as single RESOURCE topic
+    snippet = raw_text.strip()
+    if len(snippet) > 1000:
+        snippet = snippet[:997] + "..."
+    return [{
+        "type": "TOPIC",
+        "name": "RESOURCE",
+        "subtopics": [{"type": "SUBTOPIC", "name": snippet, "content": "Content not available"}]
+    }]
 
 
 # ---- Main function that talks to OpenRouter ----
@@ -421,18 +421,18 @@ def generate_api_response(context: str, query: str, model: str = "openai/gpt-3.5
         '  "type": "TOPIC",\n'
         '  "name": "Short topic name",\n'
         '  "subtopics": [ { "type": "SUBTOPIC", "name": "Short subtopic name", "content": "2–4 sentences of clear, beginner-friendly explanation that includes (1) what it is, (2) one concrete example, and (3) why it matters." } ]\n'
-        "\nSTRICT RULES:\n"
-        "    1) Output JSON only. No prose, no preface, no trailing commentary.\n"
-        "    2) Top-level MUST be an array.\n"
-        "    3) Each topic object MUST have exactly the keys: type, name, subtopics.\n"
-        "    4) Each subtopic object MUST have exactly the keys: type, name, content.\n"
-        "    5) type MUST be 'TOPIC' for topics and 'SUBTOPIC' for subtopics.\n"
-        "    6) Provide AT LEAST 5 topics; EACH topic MUST have AT LEAST 5 subtopics.\n"
-        "    7) The 'content' MUST be plain text paragraphs (2–4 sentences, ~40–100 words). Do NOT use lists, bullets, code fences, emojis, or links unless asked.\n"
-        "    8) Keep names concise (max ~60 chars). Keep each content focused, concrete, and practical.\n"
-        "    9) Never include duplicate topics or subtopics within a topic.\n"
-        "    10) Stay within the requested subject and audience level.\n"
-    )
+    "\nSTRICT RULES:\n"
+    "1) Output JSON only. No prose, no preface, no trailing commentary.\n"
+    "2) Top-level MUST be an array.\n"
+    "3) Each topic object MUST have exactly the keys: type, name, subtopics.\n"
+    "4) Each subtopic object MUST have exactly the keys: type, name, content.\n"
+    "5) type MUST be 'TOPIC' for topics and 'SUBTOPIC' for subtopics.\n"
+    "6) Provide AT LEAST 5 topics; EACH topic MUST have AT LEAST 5 subtopics.\n"
+    "7) The 'content' MUST be plain text paragraphs (2–4 sentences, ~40–100 words). Do NOT use lists, bullets, code fences, emojis, or links unless asked.\n"
+    "8) Keep names concise (max ~60 chars). Keep each content focused, concrete, and practical.\n"
+    "9) Never include duplicate topics or subtopics within a topic.\n"
+    "10) Stay within the requested subject and audience level.\n"
+)
 
 
     user_prompt = f"Subject: {query}\n\nContext (optional):\n{context}\n\nReturn an ARRAY of topic objects only."
@@ -472,23 +472,23 @@ def generate_api_response(context: str, query: str, model: str = "openai/gpt-3.5
     assistant_text = assistant_text.strip()
 
     # direct parse
-    # try:
-    #     parsed = json.loads(assistant_text)
-    #     validated = _validate_parsed(parsed, assistant_text)
-    #     return validated
-    # except json.JSONDecodeError:
-        # # try to extract JSON substring
-        # candidate = _extract_json(assistant_text)
-        # if candidate:
-        #     try:
-        #         parsed = json.loads(candidate)
-        #         validated = _validate_parsed(parsed, assistant_text)
-        #         return validated
-        #     except json.JSONDecodeError:
-        #         return [{"type": "TOPIC", "name": "RESOURCE", "subtopics": [{"type": "SUBTOPIC", "name": f"Malformed JSON: {assistant_text[:500]}", "content": ""}]}]
+    try:
+        parsed = json.loads(assistant_text)
+        validated = _validate_parsed(parsed, assistant_text)
+        return validated
+    except json.JSONDecodeError:
+        # try to extract JSON substring
+        candidate = _extract_json(assistant_text)
+        if candidate:
+            try:
+                parsed = json.loads(candidate)
+                validated = _validate_parsed(parsed, assistant_text)
+                return validated
+            except json.JSONDecodeError:
+                return [{"type": "TOPIC", "name": "RESOURCE", "subtopics": [{"type": "SUBTOPIC", "name": f"Malformed JSON: {assistant_text[:500]}", "content": ""}]}]
         # fallback: return raw as RESOURCE
-    # snippet = assistant_text if len(assistant_text) <= 1000 else assistant_text[:997] + "..."
-    return [{"type": "TOPIC", "name": "RESOURCE", "subtopics": [{"type": "SUBTOPIC", "name": assistant_text, "content": ""}]}]
+        snippet = assistant_text if len(assistant_text) <= 1000 else assistant_text[:997] + "..."
+        return [{"type": "TOPIC", "name": "RESOURCE", "subtopics": [{"type": "SUBTOPIC", "name": snippet, "content": ""}]}]
 
 
 

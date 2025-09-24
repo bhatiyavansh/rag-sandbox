@@ -45,6 +45,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from client import generate_api_response
+from content import generate_subtopic_items
 # from client import generate_full_learning_json  # adjust import path if required
 
 app = FastAPI(title="RAG Roadmap API")
@@ -72,6 +73,8 @@ class TopicModel(BaseModel):
     name: str
     subtopics: List[SubtopicModel]
 
+
+
 @app.get("/")
 def home():
     return {"message": "RAG Roadmap running"}
@@ -83,6 +86,7 @@ def ask(q: str = Query(..., description="Subject to generate roadmap for")):
     """
     # You can include ctx from files/repo if available, currently empty string used
     context = ""
-    result = generate_api_response(context, q)
+    # result = generate_api_response(context, q)
+    result=generate_subtopic_items(context, q)
     # result is already a list of dicts validated & repaired by client
     return result
