@@ -86,6 +86,19 @@ def ask(q: str = Query(..., description="Subject to generate roadmap for")):
     """
     # You can include ctx from files/repo if available, currently empty string used
     context = ""
+    result = generate_api_response(context, q)
+    # result=generate_subtopic_items(context, q)
+    # result is already a list of dicts validated & repaired by client
+    return result
+
+# ------------------ content.py ------------------
+@app.get("/content")
+def ask(q: str = Query(..., description="Subject to generate roadmap for")):
+    """
+    Returns an array of Topic objects for the requested subject.
+    """
+    # You can include ctx from files/repo if available, currently empty string used
+    context = ""
     # result = generate_api_response(context, q)
     result=generate_subtopic_items(context, q)
     # result is already a list of dicts validated & repaired by client
