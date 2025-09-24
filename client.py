@@ -371,7 +371,7 @@ def _validate_parsed(parsed: Any, raw_text: str) -> List[Dict[str, Any]]:
                     "type": "TOPIC",
                     "name": "RESOURCE",
                     "subtopics": [{"type": "SUBTOPIC", "name": "RESOURCE", "content": "No content available"}]
-                })
+                }) 
         return out
 
     if isinstance(parsed, dict):
