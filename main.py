@@ -423,87 +423,75 @@ def ask(q: str = Query(..., description="Subject to generate roadmap for")):
     result=generate_subtopic_items(context, q)
     # result is already a list of dicts validated & repaired by client
     return result
+# main.py  (only the changed / added bits)
+
+import hashlib
+
+# --- fix: logger name ---
+logger = logging.getLogger(__name__)  # was _name_
+
+def _sha1(s: str) -> str:
+    return hashlib.sha1(s.encode("utf-8")).hexdigest()
 
 @app.post("/pdf/query")
 async def pdf_query(
     file: UploadFile = File(..., description="PDF file to analyze"),
     query: str = Form(..., description="Question about the PDF content")
 ):
-    """
-    Upload a PDF and ask questions about it with context-aware responses
-    """
     if not file.filename or not file.filename.lower().endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Please upload a PDF file")
-    
     try:
         logger.info(f"Processing PDF query: {query} for file: {file.filename}")
-        
-        # Extract text from PDF
         pdf_text = extract_pdf_text(file.file)
         if not pdf_text or len(pdf_text.strip()) < 50:
             raise HTTPException(status_code=400, detail="PDF appears to be empty or has insufficient text")
-        
-        logger.info(f"Extracted {len(pdf_text)} characters from PDF")
-        
-        # Option 1: Simple approach - use full text as context (for smaller PDFs)
-        if len(pdf_text) < 10000:  # Less than ~10k chars, use directly
+
+        # choose context strategy (same as your code)
+        if len(pdf_text) < 10000:
             context = pdf_text
             answer = generate_api_response(context, query)
-            
-            return {
-                "query": query,
-                "answer": answer,
-                "context_used": context[:500] + "..." if len(context) > 500 else context,
-                "source": f"PDF: {file.filename}"
-            }
-        
-        # Option 2: Vector search approach (for larger PDFs)
+            source_label = f"PDF: {file.filename}"
         else:
             try:
                 store = get_or_create_store(pdf_text)
                 if store is None:
-                    # Fallback to chunking approach
                     chunks = chunk_text(pdf_text, chunk_size=1000)
-                    context = "\n\n".join(chunks[:5])  # Use first 5 chunks
+                    context = "\n\n".join(chunks[:5])
                 else:
-                    # Use vector search to find relevant context
                     query_embedding = get_embedding(query)
                     relevant_chunks = store.search(query_embedding, top_k=3)
                     context = "\n\n".join(relevant_chunks)
-                
-                # Generate answer with context
-                if hasattr(generate_api_response, '__call__'):
-                    # If generate_api_response expects different format, adapt here
-                    answer = f"Based on the PDF content: {query}\n\nContext: {context}"
-                    # You might need to call a different function here that returns a string
-                    try:
-                        from general import generate_general_response
-                        answer = generate_general_response(context, query)
-                    except:
-                        answer = f"Query: {query}\n\nRelevant content from PDF:\n{context}"
-                else:
-                    answer = f"Context from PDF:\n{context}"
-                
-                return {
-                    "query": query,
-                    "answer": answer,
-                    "context_used": context[:500] + "..." if len(context) > 500 else context,
-                    "source": f"PDF: {file.filename} (vector search)"
-                }
-                
+
+                try:
+                    answer = generate_general_response(context, query)
+                except Exception:
+                    answer = f"Query: {query}\n\nRelevant PDF content:\n{context}"
+                source_label = f"PDF: {file.filename} (vector search)"
             except Exception as e:
                 logger.warning(f"Vector search failed, using fallback: {e}")
-                # Fallback to simple chunking
                 chunks = chunk_text(pdf_text, chunk_size=1000)
-                context = "\n\n".join(chunks[:3])  # Use first 3 chunks
-                
-                return {
-                    "query": query,
-                    "answer": f"Based on the PDF content:\n\n{context}",
-                    "context_used": context[:500] + "..." if len(context) > 500 else context,
-                    "source": f"PDF: {file.filename} (fallback)"
-                }
-        
+                context = "\n\n".join(chunks[:3])
+                answer = f"Based on the PDF content:\n\n{context}"
+                source_label = f"PDF: {file.filename} (fallback)"
+
+        context_excerpt = context[:1200]  # keep it light for metadata
+        metadata_patch = {
+            "type": "pdf",
+            "filename": file.filename,
+            "context_excerpt": context_excerpt,
+            "context_hash": _sha1(context_excerpt),
+            "bytes_used": len(context),
+            "source": source_label,
+        }
+
+        return {
+            "query": query,
+            "answer": answer,
+            "context_used": context_excerpt,
+            "source": source_label,
+            "metadata_patch": metadata_patch,   # <—— NEW
+        }
+
     except HTTPException:
         raise
     except Exception as e:
@@ -570,24 +558,137 @@ async def pdf_content(
         raise HTTPException(status_code=500, detail=f"Error processing PDF: {str(e)}")
 
 
+# @app.post("/general")
+# def general(request: GeneralRequest):
+#     """
+#     Accepts metadata and a query, uses metadata as context,
+#     returns standardized output from LLM.
+#     """
+#     # Flatten metadata as context string
+#     try:
+#         import json
+#         context_str = json.dumps(request.metadata.dict())
+#     except Exception as e:
+#         raise HTTPException(status_code=400, detail=f"Invalid metadata: {e}")
+
+#     query = request.query
+
+#     try:
+#         # Call your existing API wrapper (no system prompt)
+#         result = generate_general_response(context_str, query)
+#         return result
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Error generating response: {e}")
+
+
+# replace your existing /general route with this function
 @app.post("/general")
 def general(request: GeneralRequest):
     """
-    Accepts metadata and a query, uses metadata as context,
-    returns standardized output from LLM.
+    Accepts metadata and a query, uses metadata as context via local embeddings,
+    and returns a focused answer (prioritizing recent messages).
     """
-    # Flatten metadata as context string
     try:
-        import json
-        context_str = json.dumps(request.metadata.dict())
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid metadata: {e}")
+        md = request.metadata.dict()
+        query = request.query.strip()
 
-    query = request.query
+        # 1) Build textual corpus items from metadata (keep items short & meaningful)
+        items = []
+        if md.get("events"):
+            # keep events compact
+            try:
+                ev_text = "\n".join(
+                    (f"{e.get('type','event')}: {e.get('text', json.dumps(e))}" 
+                     if isinstance(e, dict) else str(e))
+                    for e in md["events"]
+                )
+                items.append("Events:\n" + ev_text)
+            except Exception:
+                items.append("Events: " + json.dumps(md["events"])[:1000])
 
-    try:
-        # Call your existing API wrapper (no system prompt)
-        result = generate_general_response(context_str, query)
-        return result
+        if md.get("roadmap"):
+            try:
+                items.append("Roadmap:\n" + json.dumps(md["roadmap"]))
+            except Exception:
+                items.append("Roadmap (truncated)")
+
+        # messages: preserve role + content as separate items (better retrieval granularity)
+        if md.get("messages"):
+            for m in md["messages"]:
+                role = m.get("role", "user") if isinstance(m, dict) else "user"
+                content = m.get("content", str(m)) if isinstance(m, dict) else str(m)
+                # keep messages reasonably short
+                items.append(f"{role}: {content}")
+
+        # if items is empty, build a fallback from full metadata json
+        if not items:
+            items = [json.dumps(md)[:4000]]
+
+        # 2) Create / load vector store for the metadata corpus
+        # join into a single text blob for hashing in get_or_create_store
+        corpus_blob = "\n\n".join(items)
+        store = get_or_create_store(corpus_blob)
+
+        # 3) Build context using vector search (if store exists), otherwise fallback to raw blob
+        context_blocks = []
+        TOP_K = 6
+        if store is not None:
+            try:
+                q_emb = get_embedding(query)
+                hits = store.search(q_emb, top_k=TOP_K)  # returns list of (text, score)
+                # take only the texts (most relevant first)
+                context_blocks = [h[0] if isinstance(h, (list, tuple)) else h for h in hits]
+                # dedupe while preserving order
+                seen = set()
+                deduped = []
+                for c in context_blocks:
+                    if c not in seen:
+                        deduped.append(c)
+                        seen.add(c)
+                context_blocks = deduped
+            except Exception as e:
+                logger.warning(f"Vector search failed: {e}")
+                context_blocks = [corpus_blob]
+        else:
+            context_blocks = [corpus_blob]
+
+        # 4) Always append the last 1-2 messages explicitly to prioritize recency
+        last_msgs = (md.get("messages") or [])[-2:]
+        for lm in last_msgs:
+            if isinstance(lm, dict):
+                context_blocks.append(f"{lm.get('role','user')}: {lm.get('content','')}")
+            else:
+                context_blocks.append(f"user: {lm}")
+
+        # 5) Append the latest user query (strong recency signal)
+        context_blocks.append(f"Latest user query: {query}")
+
+        # 6) Assemble final context string, trimming to safe length
+        # adjust trim_chars to suit your LLM token budget (e.g., 3000-6000 characters)
+        trim_chars = 4000
+        context = "\n\n".join(context_blocks)
+        if len(context) > trim_chars:
+            # keep most relevant: take top hits and always keep the tail (recent messages + query)
+            # find split point where we keep last ~1000 chars for recency then fill from start
+            tail = "\n\n".join(context_blocks[-3:])  # last few blocks
+            head = "\n\n".join(context_blocks[: max(0, TOP_K - 3)])
+            composed = head + "\n\n" + tail
+            context = composed[:trim_chars]
+
+        # 7) Call your LLM wrapper with the context and query
+        answer = generate_general_response(context, query)
+
+        # 8) Return structured response plus a small metadata patch for caching/logging
+        context_excerpt = context[:1200]
+        metadata_patch = {
+            "context_hash": hashlib.sha1(context_excerpt.encode("utf-8")).hexdigest(),
+            "context_excerpt": context_excerpt,
+            "source": "metadata_vector_search" if store is not None else "metadata_raw",
+            "items_indexed": len(items)
+        }
+
+        return answer
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generating response: {e}")
+        logger.exception("Error in /general route")
+        raise HTTPException(status_code=500, detail=f"Error generating response: {str(e)}")
